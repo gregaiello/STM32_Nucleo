@@ -3,8 +3,8 @@
 **
 **  File        : stm32_flash.ld
 **
-**  Abstract    : Linker script for STM32F407VG Device with
-**                1024KByte FLASH, 128KByte RAM
+**  Abstract    : Linker script for STM32F413ZH Device with
+**               1536 KByte FLASH, 320KByte RAM
 **
 **                Set heap size, stack size and stack location according
 **                to application requirements.
@@ -13,18 +13,8 @@
 **
 **  Target      : STMicroelectronics STM32
 **
-**  Environment : Atollic TrueSTUDIO(R)
-**
-**  Distribution: The file is distributed “as is,” without any warranty
+**  Distribution: The file is distributed as is, without any warranty
 **                of any kind.
-**
-**  (c)Copyright Atollic AB.
-**  You may use this file as-is or modify it according to the needs of your
-**  project. Distribution of this file (unmodified or modified) is not
-**  permitted. Atollic AB permit registered Atollic TrueSTUDIO(R) users the
-**  rights to distribute the assembled, compiled & linked contents of this
-**  file as part of an application binary file, provided that it is built
-**  using the Atollic TrueSTUDIO(R) toolchain.
 **
 *****************************************************************************
 */

@@ -27,7 +27,7 @@ void loop() {
     GPIO_ResetBits(GPIOB, LEDS);
     GPIO_SetBits(GPIOB, LED[counter % 3]);
 
-    delay(1000);
+    delay(10);
 }
 
 void delay(uint32_t ms) {
