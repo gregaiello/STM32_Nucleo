@@ -17,6 +17,7 @@ SOURCES += \
 			$(PERIPH)/src/stm32f4xx_spi.c \
 			$(PERIPH)/src/stm32f4xx_exti.c \
 			$(PERIPH)/src/stm32f4xx_syscfg.c \
+			$(PERIPH)/src/stm32f4xx_tim.c \
 			$(PERIPH)/src/misc.c
 
 SOURCES += startup_stm32f4xx.S
