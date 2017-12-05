@@ -9,7 +9,7 @@ uint32_t _PLLN =  100;
 int main() {
 	setClock(_PLLM, _PLLN, _PLLP);
     	init_LEDS();
-//	init_I2C_FMP();
+	init_I2C_FMP();
     	do {
         	loop();
     	} while (1);
