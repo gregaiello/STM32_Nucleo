@@ -14,6 +14,7 @@ const uint16_t USER_BUTTON = GPIO_Pin_13;
 
 int brigthLed2 = 2;
 int brightLed1 = 2;
+uint32_t counter = 1;
 int delta = 1;
 int lastButtonStatus = RESET;
 
