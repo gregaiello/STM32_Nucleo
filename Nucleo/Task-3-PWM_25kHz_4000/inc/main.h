@@ -1,0 +1,125 @@
+#include <stdint.h>
+#include "stm32f4xx.h"
+#include "stm32f4xx_gpio.h"
+#include "stm32f4xx_rcc.h"
+#include "stm32f4xx_tim.h"
+#include "stm32f4xx_flash.h"
+
+#define RCC_FLAG_MASK  ((uint8_t) 0x1FU)
+#define RCC_GET_FLAG(__FLAG__) (((((((__FLAG__) >> 5U) == 1U)? RCC->CR :((((__FLAG__) >> 5U) == 2U) ? RCC->BDCR :((((__FLAG__) >> 5U) == 3U)? RCC->CSR :RCC->CIR))) & (1U << ((__FLAG__) & RCC_FLAG_MASK)))!= 0U)? 1U : 0U)
+
+#define RCC_PWR_CLK_ENABLE()     do { \
+                                        volatile uint32_t tmpreg = 0x00U; \
+                                        SET_BIT(RCC->APB1ENR, RCC_APB1ENR_PWREN);\
+                                        /* Delay after an RCC peripheral clock enabling */ \
+                                        tmpreg = READ_BIT(RCC->APB1ENR, RCC_APB1ENR_PWREN);\
+                                        ((void)(tmpreg)); \
+                                          } while(0U)
+
+#define PWR_VOLTAGESCALING_CONFIG(__REGULATOR__) do {                                                     \
+                                                            volatile uint32_t tmpreg = 0x00U;                        \
+                                                            MODIFY_REG(PWR->CR, PWR_CR_VOS, (__REGULATOR__));   \
+                                                            /* Delay after an RCC peripheral clock enabling */  \
+                                                            tmpreg = READ_BIT(PWR->CR, PWR_CR_VOS);             \
+                                                            ((void)(tmpreg)); \
+                                                          } while(0U)
+
+#define RCC_SYSCLK_CONFIG(__RCC_SYSCLKSOURCE__) MODIFY_REG(RCC->CFGR, RCC_CFGR_SW, (__RCC_SYSCLKSOURCE__))
+
+#define RCC_GET_SYSCLK_SOURCE() (RCC->CFGR & RCC_CFGR_SWS)
+
+#define FLASH_SET_LATENCY(__LATENCY__) (*(__IO uint8_t *)ACR_BYTE0_ADDRESS = (uint8_t)(__LATENCY__))
+
+#define DELAY_TIM_FREQUENCY_MS 1000			/* = 1kHZ -> timer runs in milliseconds */
+
+const uint16_t LEDS = GPIO_Pin_7 | GPIO_Pin_14 | GPIO_Pin_0;
+const uint16_t LED[3] = {GPIO_Pin_7, GPIO_Pin_14, GPIO_Pin_0};
+const uint16_t USER_BUTTON = GPIO_Pin_13;
+
+int brigthLed2 = 2;
+int brightLed1 = 2;
+uint32_t counter = 1;
+int delta = 1;
+int lastButtonStatus = RESET;
+
+void init_Button();
+void init_LEDS();
+void init_PWM();
+void PLL_Disable();
+void PLL_Enable();
+void loop();
+
+void setClock(uint32_t _PLLM, uint32_t _PLLN, uint32_t _PLLP);
+uint32_t getClock(uint32_t _PLLM, uint32_t _PLLN, uint32_t _PLLP);
+
+void init_ms();
+void stop_timer();
+void delay_ms(uint32_t ms);
+
+typedef struct
+{
+  uint32_t PLLState;   /*!< The new state of the PLL.
+                            This parameter can be a value of @ref RCC_PLL_Config                      */
+
+  uint32_t PLLSource;  /*!< RCC_PLLSource: PLL entry clock source.
+                            This parameter must be a value of @ref RCC_PLL_Clock_Source               */
+
+  uint32_t PLLM;       /*!< PLLM: Division factor for PLL VCO input clock.
+                            This parameter must be a number between Min_Data = 0 and Max_Data = 63    */
+
+  uint32_t PLLN;       /*!< PLLN: Multiplication factor for PLL VCO output clock.
+                            This parameter must be a number between Min_Data = 50 and Max_Data = 432 
+                            except for STM32F411xE devices where the Min_Data = 192 */
+
+  uint32_t PLLP;       /*!< PLLP: Division factor for main system clock (SYSCLK).
+                            This parameter must be a value of @ref RCC_PLLP_Clock_Divider             */
+
+  uint32_t PLLQ;       /*!< PLLQ: Division factor for OTG FS, SDIO and RNG clocks.
+                            This parameter must be a number between Min_Data = 2 and Max_Data = 15    */
+
+  uint32_t PLLR;       /*!< PLLR: PLL division factor for I2S, SAI, SYSTEM, SPDIFRX clocks. */
+
+}RCC_PLLInitTypeDef;
+
+typedef struct
+{
+  uint32_t OscillatorType;       /*!< The oscillators to be configured.
+                                      This parameter can be a value of @ref RCC_Oscillator_Type                   */
+
+  uint32_t HSEState;             /*!< The new state of the HSE.
+                                      This parameter can be a value of @ref RCC_HSE_Config                        */
+
+  uint32_t LSEState;             /*!< The new state of the LSE.
+                                      This parameter can be a value of @ref RCC_LSE_Config                        */
+
+  uint32_t HSIState;             /*!< The new state of the HSI.
+                                      This parameter can be a value of @ref RCC_HSI_Config                        */
+
+  uint32_t HSICalibrationValue;  /*!< The HSI calibration trimming value (default is RCC_HSICALIBRATION_DEFAULT).
+                                       This parameter must be a number between Min_Data = 0x00 and Max_Data = 0x1F */
+
+  uint32_t LSIState;             /*!< The new state of the LSI.
+                                      This parameter can be a value of @ref RCC_LSI_Config                        */
+
+  RCC_PLLInitTypeDef PLL;        /*!< PLL structure parameters                                                    */
+}RCC_OscInitTypeDef;
+
+typedef struct
+{
+  uint32_t ClockType;             /*!< The clock to be configured.
+                                       This parameter can be a value of @ref RCC_System_Clock_Type      */
+
+  uint32_t SYSCLKSource;          /*!< The clock source (SYSCLKS) used as system clock.
+                                       This parameter can be a value of @ref RCC_System_Clock_Source    */
+
+  uint32_t AHBCLKDivider;         /*!< The AHB clock (HCLK) divider. This clock is derived from the system clock (SYSCLK).
+                                       This parameter can be a value of @ref RCC_AHB_Clock_Source       */
+
+  uint32_t APB1CLKDivider;        /*!< The APB1 clock (PCLK1) divider. This clock is derived from the AHB clock (HCLK).
+                                       This parameter can be a value of @ref RCC_APB1_APB2_Clock_Source */
+
+  uint32_t APB2CLKDivider;        /*!< The APB2 clock (PCLK2) divider. This clock is derived from the AHB clock (HCLK).
+                                       This parameter can be a value of @ref RCC_APB1_APB2_Clock_Source */
+
+}RCC_ClkInitTypeDef;
+

@@ -1,4 +1,4 @@
-PROJECT_NAME=ARMBAND
+PROJECT_NAME=PWM
 
 BUILDDIR = build
 
@@ -19,6 +19,7 @@ SOURCES += \
 			$(PERIPH)/src/stm32f4xx_syscfg.c \
 			$(PERIPH)/src/stm32f4xx_fmpi2c.c \
 			$(PERIPH)/src/stm32f4xx_tim.c \
+			$(PERIPH)/src/stm32f4xx_flash.c \
 			$(PERIPH)/src/misc.c
 
 SOURCES += startup_stm32f4xx.S

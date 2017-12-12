@@ -2,7 +2,7 @@
 
 uint32_t HSI_CLOCK = 16000000;
 uint32_t _PLLM =  8;
-uint32_t _PLLP =  2; 
+uint32_t _PLLP =  0; // it means PLLP = 2 
 uint32_t _PLLN =  100; 
 
 int main() 
@@ -20,7 +20,7 @@ int main()
 void loop() {
 	switch(counter)
 	{
-		case 7000: 
+		case 4000: 
 
 				delta = -1;
 				break;
@@ -35,9 +35,9 @@ void loop() {
 	if (lastButtonStatus != currentButtonStatus && currentButtonStatus != RESET) 
 	{
 		brigthLed2 *= 2;
-		if (brigthLed2 >= 10000 ) 
+		if (brigthLed2 >= 4000 ) 
 		{
-		        brigthLed2 = 5000;
+		        brigthLed2 = 2500;
 		}
 		TIM_SetCompare3(TIM3, brigthLed2);
 		TIM_SetCompare1(TIM12, brigthLed2);
@@ -64,7 +64,7 @@ void init_LEDS()
 	GPIO_InitTypeDef GPIO_InitStructure_AF;
 	GPIO_InitStructure_AF.GPIO_Pin = GPIO_Pin_7 | GPIO_Pin_0 | GPIO_Pin_14;
 	GPIO_InitStructure_AF.GPIO_Mode = GPIO_Mode_AF;
-	GPIO_InitStructure_AF.GPIO_Speed = GPIO_Speed_50MHz;
+	//GPIO_InitStructure_AF.GPIO_Speed = GPIO_Speed_100MHz;
 	GPIO_InitStructure_AF.GPIO_OType = GPIO_OType_PP;
 	GPIO_InitStructure_AF.GPIO_PuPd = GPIO_PuPd_UP;
 	GPIO_Init(GPIOB, &GPIO_InitStructure_AF);
@@ -91,17 +91,17 @@ void init_PWM()
 */
 
 	/* TIM4 clockenable */
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE); // APB1 runs at 50MHz (prescaler = 2)
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE); // APB1 runs at 50MHz (prescaler = 2)
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM12, ENABLE); // APB1 runs at 50MHz (prescaler = 2)
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE); // APB1 runs at 50MHz or 100MHz? (not clear in DS)
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE); // APB1 runs at 50MHz or 100MHz? (not clear in DS)
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM12, ENABLE); // APB1 runs at 50MHz or 100MHz? (not clear in DS)
 
 	/* Compute the prescaler value */
-	uint32_t PrescalerValue = (uint32_t) (SystemCoreClock / 10000000) - 1; // f_timer = 10 MHz
+	uint16_t PrescalerValue = 0; //(uint32_t) (SystemCoreClock / 10000000) - 1; // 20MHz f_cnt (in the library is added a +1 take it into account)
 	TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
 
 	/* Time base configuration */
-	TIM_TimeBaseStructure.TIM_Period = 10000; // f_pwm = 10MHz/10000 = 1 kHz
-	TIM_TimeBaseStructure.TIM_Prescaler = PrescalerValue;
+	TIM_TimeBaseStructure.TIM_Period = (uint16_t) 3999; // f_pwm = 10MHz/10000 = 1 kHz
+	TIM_TimeBaseStructure.TIM_Prescaler = (uint16_t) PrescalerValue;
 	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
 
 	TIM_TimeBaseInit(TIM4, &TIM_TimeBaseStructure);
@@ -166,49 +166,30 @@ void delay_ms(uint32_t ms) {
 
 void setClock(uint32_t _PLLM, uint32_t _PLLN, uint32_t _PLLP)
 { 
-        /*Things to setup:
-		1-	Enable power supply: APB1EN bit 28 set to 0b1
-		2-	Set power supply: PWR_CR bit 14-15 set to 0b11 (<100MHz)
-		3-	Set HSI as system clock: RCC_CFGR bit 1-2 set to 0b00 
-		4-	Enable HSI: RCC_CR bit 1 set to 0b1
-		a-	Wait until HSI is ready: RCC_CR bit 2 set by hardware to 1 when HSI is ready
-		5-	Disable PLL: RCC_CR bit 24 set to 0b0
-		b-	Wait until PLL is ready: RCC_CR bit 25 set by hardware to 0 when PLL is ready
-		6-	HSI as PLL source: RCC_PLLCFGR bit 22 set to 0b0
-		7-	PLLM = 8: RCC_PLLCFGR bit 0-5 set to 0b010000
-		8-	PLLN = 100: RCC_PLLCFGR bit 6-14 set to 0b001100100
-		9-	PLLP = 2: RCC_PLLCFGR bit 16-17 set to 0b00
-		10-	Enable PLL: RCC_CR bit 24 set to 0b1
-		c-	Wait until PLL is ready: RCC_CR bit 25 set by hardware to 1 when PLL ready	
-	*/
-	
-	RCC->APB1ENR |= RCC_APB1ENR_PWREN; // Power interface clock enable
-	
-	uint32_t tmp;
-	tmp = (PWR->CR & (uint32_t)(~((uint32_t) PWR_CR_VOS))); // Mask to reset bits we want to change (0b11 << 14)
-	PWR->CR = (tmp | ((uint32_t) PWR_CR_VOS)); // Regulator voltage scaling output selection (scale 1)
+	RCC_OscInitTypeDef RCC_OscInitStruct;
+	RCC_ClkInitTypeDef RCC_ClkInitStruct;
 
-	RCC->CR |= RCC_CR_HSION; // Enable HSI, RCC_CR bit 1 set to 1
-	
-	while(RCC_GET_FLAG(RCC_FLAG_HSIRDY) == RESET) // wait until HSI is ready and running
-	{
-	}
-	
-        RCC->CFGR = 0x0;       		//no APB2 high-speed prescaler
-	                                //no AHB prescaler
-	                                //HSI set as system clock 
-	
-	(RCC->CR) &= (uint32_t)(~((uint32_t) RCC_CR_PLLON)); // Disable PLL, RCC_CR bit 24 set to 0
+	/**Configure the main internal regulator output voltage */
+	RCC_PWR_CLK_ENABLE();
+	PWR_VOLTAGESCALING_CONFIG(PWR_CR_VOS);
 
-	while(RCC_GET_FLAG(RCC_FLAG_PLLRDY) != RESET) // wait until PLL is ready
-	{
-	}
-
-	(RCC->PLLCFGR) &= (uint32_t)(~(RCC_PLLCFGR_PLLSRC)); // Set HSI as PLL input, bit 22 set to 0
-
+	/**Initializes the CPU, AHB and APB busses clocks */
+	RCC_OscInitStruct.OscillatorType = 0x2;
+	RCC_OscInitStruct.HSIState = (uint8_t) 0x1;
+	RCC_OscInitStruct.HSICalibrationValue = 16;
+	RCC_OscInitStruct.PLL.PLLState = (uint8_t) 0x2;
+	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLCFGR_PLLSRC_HSI;
+	RCC_OscInitStruct.PLL.PLLM = _PLLM;
+	RCC_OscInitStruct.PLL.PLLN = _PLLN;
+	RCC_OscInitStruct.PLL.PLLP = _PLLP;
+	
+	PLL_Disable();
+	
+	(RCC->PLLCFGR) &= (uint32_t) (~(RCC_PLLCFGR_PLLSRC)); // Set HSI as PLL input, bit 22 set to 0
+	
 	uint32_t tmp1;
-        tmp1 = (RCC->CFGR & (uint32_t)(~(RCC_CFGR_PPRE1))); // Create mask to set 101 (division by 4) for APB low speed clk
-        RCC->CFGR = (tmp1 | ((uint32_t) RCC_CFGR_PPRE2_DIV2)); // Prescaler APB1 low speed = 2 (50MHz)  
+        tmp1 = (RCC->CFGR & (uint32_t)(~(RCC_CFGR_PPRE1)));
+        RCC->CFGR = (tmp1 | ((uint32_t) RCC_CFGR_PPRE1_DIV2)); // Prescaler APB1 low speed = 2 (50MHz)  
 	
 	uint32_t tmp2;
         tmp2 = RCC->PLLCFGR & (uint32_t)(~((uint32_t) RCC_PLLCFGR_PLLM)); // Create mask to set PLLM (~0b111111) 
@@ -217,25 +198,56 @@ void setClock(uint32_t _PLLM, uint32_t _PLLN, uint32_t _PLLP)
 	uint32_t tmp3;
         tmp3 = RCC->PLLCFGR & (uint32_t)(~((uint32_t) RCC_PLLCFGR_PLLN)); // Create mask to set PLLN (~0b111111111000000) 
         RCC->PLLCFGR = (tmp3 | (((uint32_t) _PLLN) << 6)); // PLLN set (bit 6:14)  
-	
-        uint32_t tmp4;
+
+	uint32_t tmp4;
         tmp4 = RCC->PLLCFGR & (uint32_t)(~((uint32_t) RCC_PLLCFGR_PLLP)); // Create mask to set PLLP (~0b110000000000000000) 
-        RCC->PLLCFGR = (tmp4 | (((uint32_t) _PLLP) << 16)); // PLLP set (bit 16:17) 
+        RCC->PLLCFGR = (tmp4 | (((uint32_t) _PLLP) << 16)); // PLLP set (bit 16:17)
 
-	RCC->CR |= ((uint32_t) RCC_CR_PLLON); // Enable PLL (everything has to be already set)
+	PLL_Enable();	
 	
-        while(RCC_GET_FLAG(RCC_FLAG_PLLRDY) == RESET) // wait until PLL is ready
-	{
-	}
+	/**Initializes the CPU, AHB and APB busses clocks */
+	RCC_ClkInitStruct.ClockType = 0xF;
+	RCC_ClkInitStruct.SYSCLKSource = RCC_CFGR_SW_PLL;
+	RCC_ClkInitStruct.AHBCLKDivider = RCC_CFGR_HPRE_DIV1;
+	RCC_ClkInitStruct.APB1CLKDivider = RCC_CFGR_PPRE1_DIV2;
+	RCC_ClkInitStruct.APB2CLKDivider = RCC_CFGR_PPRE1_DIV1;
+	
+	/* set new latency for flash (I am running faster) */
+	FLASH_SET_LATENCY(FLASH_Latency_3);
 
-	uint32_t tmp5;
-        tmp5 = RCC->CFGR & (uint32_t)(~((uint32_t) RCC_CFGR_SW)); // Create mask to set PLL as clock input (~0b11) 
-        RCC->CFGR = (tmp5 | ((uint32_t) RCC_CFGR_SW_PLL)); // PLL as system clock input
-
-	while(RCC_GET_FLAG(RCC_CFGR_SWS) == RCC_CFGR_SWS_PLL) // wait until system clock is ready
+	/* HCLK: Set the highest APBx dividers in order to ensure that we do not go through
+	a non-spec phase whatever we decrease or increase HCLK. */
+	if(((RCC_ClkInitStruct.ClockType) & 0x04) == 0x04)
 	{
+		MODIFY_REG(RCC->CFGR, RCC_CFGR_PPRE1, RCC_CFGR_PPRE1_DIV16);
 	}
+	if(((RCC_ClkInitStruct.ClockType) & 0x08) == 0x08)
+	{
+		MODIFY_REG(RCC->CFGR, RCC_CFGR_PPRE2, (RCC_CFGR_PPRE1_DIV16 << 3));
+	}
+	MODIFY_REG(RCC->CFGR, RCC_CFGR_HPRE, RCC_ClkInitStruct.AHBCLKDivider);	
+	
+	/* SYSCLK: */
+	RCC_SYSCLK_CONFIG(RCC_ClkInitStruct.SYSCLKSource);
+	while(RCC_GET_SYSCLK_SOURCE() != RCC_CFGR_SWS_PLL);
+
+	/*PCLK1: */
+	MODIFY_REG(RCC->CFGR, RCC_CFGR_PPRE1, RCC_ClkInitStruct.APB1CLKDivider);
+	MODIFY_REG(RCC->CFGR, RCC_CFGR_PPRE2, ((RCC_ClkInitStruct.APB2CLKDivider) << 3U));
+
 	SystemCoreClockUpdate();
+}
+
+void PLL_Disable()
+{
+	(RCC->CR) &= (uint32_t) (~((uint32_t) RCC_CR_PLLON)); // Disable PLL, RCC_CR bit 24 set to 0	
+	while(RCC_GET_FLAG(RCC_FLAG_PLLRDY) != RESET);	
+}
+
+void PLL_Enable()
+{
+	(RCC->CR) |= (uint32_t) ((uint32_t) RCC_CR_PLLON); // Enable PLL, RCC_CR bit 24 set to 1
+	while(RCC_GET_FLAG(RCC_FLAG_PLLRDY) == RESET);	
 }
 
 uint32_t getClock(uint32_t _PLLM, uint32_t _PLLN, uint32_t _PLLP)
